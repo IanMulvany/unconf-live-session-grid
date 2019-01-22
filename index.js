@@ -23,7 +23,7 @@ function start() {
     // Local dependencies
     const spreadsheet = require('./lib/spreadsheet.js')
     const cache = require('./lib/cache.js');
-
+    
     // Config
     const app = express();
     app.use(helmet({ 
@@ -53,37 +53,44 @@ function start() {
     var metaTitle = 'Sessions for ' + unconfName;
 
     // Routes
-    app.get('/', cache(cacheTimeout), function (req, res) {
-        spreadsheet.getSessions( function(sessions, error) {
+    app.get('/', function (req, res) {
+        spreadsheet.getCachedSessions( function(sessions, error) {
             metaTitle = 'Sessions for ' + unconfName;
             res.render('session_listing', { sessions, error, unconfName, logoUrl, metaTitle })
         }); 
     });
 
-    app.get('/partials/sessions', cache(cacheTimeout), function (req, res) {
-        spreadsheet.getSessions( function(sessions, error) {
+    app.get('/partials/sessions', function (req, res) {
+        spreadsheet.getCachedSessions( function(sessions, error) {
             res.render('session_listing', { sessions, error, unconfName, logoUrl, metaTitle, layout: false })
         }); 
     });
 
-    app.get('/sessions/:sessionID', cache(cacheTimeout), function (req, res) {
-        spreadsheet.getSession(req.params.sessionID, function(session, error) {
+    app.get('/sessions/:sessionID', function (req, res) {
+        spreadsheet.getCachedSession(req.params.sessionID, function(session, error) {
+            if(session == null) {
+                res.status(404).send("That session can't be found. Head back to the <a href='/'>listing page</a> and try again.");
+                return;
+            }
             metaTitle = session.title + ' at ' + unconfName;
             res.render('full_session', { session, error, unconfName, metaTitle, logoUrl })
         }); 
     });
-
+    
     app.get('/sessions.json', cache(cacheTimeout), function (req, res, error) {
         spreadsheet.getSessions( function(sessions, error) {
             res.send(sessions);
         }); 
     });
 
-    app.listen(port, (err) => {
-        console.log('Listening on', port);
-        if (err) {
-            throw err;
-        }
+    // Warm the cache and then wait for requests
+    spreadsheet.initCachedSessions(function() {
+        app.listen(port, (err) => {
+            console.log('Listening on', port);
+            if (err) {
+                throw err;
+            }
+        });
     });
 
 }
